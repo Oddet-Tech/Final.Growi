@@ -15,7 +15,7 @@ class PaymentPage extends StatefulWidget {
     super.key,
     required this.cartItems,
     required this.totalPrice,
-    required this.pickupLocation,
+    required this.pickupLocation, required Color themeColor,
   });
 
   @override
