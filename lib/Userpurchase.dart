@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:growi_project/admin.dart';
 import 'package:growi_project/appscreen/payment.dart';
-import 'appscreen/models.dart';
-import 'admin.dart';
-
+import 'package:growi_project/appscreen/models.dart';
+import 'dart:io';
 
 class UserPurchase extends StatefulWidget {
   const UserPurchase({super.key});
@@ -12,42 +12,102 @@ class UserPurchase extends StatefulWidget {
 }
 
 class _UserPurchaseState extends State<UserPurchase> {
-  final List<Models> purchaseCart = [];
-  bool _showCart = false;
-  int _totalPrice = 0;
 
-  void _addToCart(Models phone) {
+  final List<Map<String, dynamic>> cart = [];
+  final Map<int, String> selectedColors = {};
+
+  bool showCart = false;
+  int totalPrice = 0;
+
+  String pickupMethod = "PEP";
+  String? selectedStore;
+  final TextEditingController customLocation = TextEditingController();
+
+  final List<String> pepStores = [
+    "PEP - East London CBD",
+    "PEP - Hemingways Mall",
+    "PEP - Mdantsane City",
+    "PEP - Beacon Bay",
+  ];
+
+  int get cartCount => cart.length;
+
+  // 🔥 IMAGE VIEW
+  void openImage(String path) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(backgroundColor: Colors.black),
+          body: Center(
+            child: InteractiveViewer(
+              child: Image.file(File(path)),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🔥 ADD TO CART
+  void addToCart(Models phone, int index) {
+
+    final color = selectedColors[index];
+
+    if (color == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please select a color")),
+      );
+      return;
+    }
+
     setState(() {
-      purchaseCart.add(phone);
-      _totalPrice += phone.price;
+      cart.add({
+        "item": phone,
+        "color": color,
+      });
+
+      totalPrice += phone.price;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('${phone.name} added to cart'),
-        duration: const Duration(seconds: 1),
+        content: Text("${phone.name} added ($color)"),
+        backgroundColor: Colors.blue,
       ),
     );
   }
 
-  void _removeFromCart(int index) {
+  // 🔥 REMOVE
+  void removeFromCart(int i) {
     setState(() {
-      _totalPrice -= purchaseCart[index].price;
-      purchaseCart.removeAt(index);
+      totalPrice -= (cart[i]["item"] as Models).price;
+      cart.removeAt(i);
     });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Item removed from cart'),
-        duration: Duration(seconds: 1),
-      ),
-    );
   }
 
-  void _checkout() {
-    if (purchaseCart.isEmpty) {
+  // 🔥 CHECKOUT (CLEAN + SAFE)
+  void checkout() {
+
+    if (cart.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cart is empty')),
+        const SnackBar(content: Text("Cart is empty")),
+      );
+      return;
+    }
+
+    String pickup = "";
+
+    if (pickupMethod == "PEP") {
+      pickup = selectedStore ?? customLocation.text;
+    } else {
+      pickup = customLocation.text;
+    }
+
+    if (pickup.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Enter pickup location")),
       );
       return;
     }
@@ -55,11 +115,146 @@ class _UserPurchaseState extends State<UserPurchase> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => PaymentPage(
-          cartItems: purchaseCart,
-          totalPrice: _totalPrice,
+        builder: (_) => PaymentPage(
+          cartItems: cart.map((e) => e["item"] as Models).toList(),
+          totalPrice: totalPrice,
+          pickupLocation: pickup,
+
+          // 🔥 THEME FIXED (SAFE)
+          themeColor: Theme.of(context).primaryColor,
         ),
       ),
+    );
+  }
+
+  // 🔥 SHOP
+  Widget buildShop() {
+
+    if (globalPhonesList.isEmpty) {
+      return const Center(child: Text("No phones"));
+    }
+
+    return ListView.builder(
+      itemCount: globalPhonesList.length,
+      itemBuilder: (_, i) {
+
+        final phone = globalPhonesList[i];
+
+        return Card(
+          margin: const EdgeInsets.all(8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+
+              if (phone.imagePath != null)
+                SizedBox(
+                  height: 200,
+                  child: PageView(
+                    children: phone.imagePath!
+                        .map((img) => GestureDetector(
+                              onTap: () => openImage(img),
+                              child: Image.file(File(img), fit: BoxFit.cover),
+                            ))
+                        .toList(),
+                  ),
+                ),
+
+              ListTile(
+                title: Text(phone.name),
+                subtitle: Text(phone.description),
+              ),
+
+              if (phone.colors.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Wrap(
+                    spacing: 8,
+                    children: phone.colors.map((color) {
+
+                      final selected = selectedColors[i] == color;
+
+                      return ChoiceChip(
+                        label: Text(color),
+                        selected: selected,
+                        onSelected: (_) {
+                          setState(() {
+                            selectedColors[i] = color;
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ),
+
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+
+                    Text(
+                      "R${(phone.price * 1.04).toStringAsFixed(2)}",
+                      style: const TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    ElevatedButton(
+                      onPressed: () => addToCart(phone, i),
+                      child: const Text("Add"),
+                    ),
+                  ],
+                ),
+              )
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // 🔥 CART
+  Widget buildCart() {
+
+    if (cart.isEmpty) {
+      return const Center(child: Text("Cart empty"));
+    }
+
+    return Column(
+      children: [
+
+        Expanded(
+          child: ListView.builder(
+            itemCount: cart.length,
+            itemBuilder: (_, i) {
+
+              final phone = cart[i]["item"] as Models;
+              final color = cart[i]["color"];
+
+              return ListTile(
+                title: Text(phone.name),
+                subtitle: Text("Color: $color"),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete),
+                  onPressed: () => removeFromCart(i),
+                ),
+              );
+            },
+          ),
+        ),
+
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: checkout,
+              child: const Text("Checkout"),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -67,40 +262,31 @@ class _UserPurchaseState extends State<UserPurchase> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Phone Store'),
+        title: const Text("Phone Store"),
+
         actions: [
+
           Stack(
             children: [
+
               IconButton(
                 icon: const Icon(Icons.shopping_cart),
-                onPressed: () {
-                  setState(() {
-                    _showCart = !_showCart;
-                  });
-                },
+                onPressed: () => setState(() => showCart = !showCart),
               ),
-              if (purchaseCart.isNotEmpty)
+
+              if (cartCount > 0)
                 Positioned(
-                  right: 0,
-                  top: 0,
+                  right: 6,
+                  top: 6,
                   child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 20,
-                      minHeight: 20,
+                    padding: const EdgeInsets.all(5),
+                    decoration: const BoxDecoration(
+                      color: Colors.blue,
+                      shape: BoxShape.circle,
                     ),
                     child: Text(
-                      '${purchaseCart.length}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
+                      cartCount.toString(),
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
                     ),
                   ),
                 ),
@@ -109,76 +295,7 @@ class _UserPurchaseState extends State<UserPurchase> {
         ],
       ),
 
-      body: _showCart ? _buildCartView() : _buildShopView(),
+      body: showCart ? buildCart() : buildShop(),
     );
-  }
-
-  Widget _buildShopView() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(8.0),
-      itemCount: globalPhonesList.length,
-      itemBuilder: (context, index) {
-        final phone = globalPhonesList[index];
-
-        return Card(
-          margin: const EdgeInsets.symmetric(vertical: 8),
-          child: ListTile(
-            title: Text(phone.name),
-            subtitle: Text(phone.description),
-            trailing: ElevatedButton(
-              onPressed: () => _addToCart(phone),
-              child: const Text("Add"),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildCartView() {
-    return purchaseCart.isEmpty
-        ? const Center(child: Text("Cart is empty"))
-        : Column(
-            children: [
-              Expanded(
-                child: ListView.builder(
-                  itemCount: purchaseCart.length,
-                  itemBuilder: (context, index) {
-                    final item = purchaseCart[index];
-                    return ListTile(
-                      title: Text(item.name),
-                      subtitle: Text("R${item.price * 1.04}"),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _removeFromCart(index),
-                      ),
-                    );
-                  },
-                ),
-              ),
-
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: purchaseCart.isEmpty ? null : _checkout,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text(
-                      "Proceed to Checkout",
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
   }
 }

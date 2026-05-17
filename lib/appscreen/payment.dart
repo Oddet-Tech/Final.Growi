@@ -1,14 +1,21 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:growi_project/appscreen/models.dart';
+import 'package:growi_project/admin.dart';
+import 'package:geolocator/geolocator.dart';
+import 'models.dart';
+
+
 
 class PaymentPage extends StatefulWidget {
   final List<Models> cartItems;
   final int totalPrice;
+  final dynamic pickupLocation;
 
   const PaymentPage({
     super.key,
     required this.cartItems,
     required this.totalPrice,
+    required this.pickupLocation,
   });
 
   @override
@@ -16,212 +23,286 @@ class PaymentPage extends StatefulWidget {
 }
 
 class _PaymentPageState extends State<PaymentPage> {
+
   final _formKey = GlobalKey<FormState>();
 
-  String _selectedPaymentMethod = "Card";
+  // 🔥 PICKUP
+  String _pickupType = "PEP";
+  String? _selectedPEP;
+  String? _selectedPostNet;
 
-  // Card fields
-  final TextEditingController cardName = TextEditingController();
-  final TextEditingController cardNumber = TextEditingController();
-  final TextEditingController expiry = TextEditingController();
-  final TextEditingController cvv = TextEditingController();
+  final TextEditingController _customLocation =
+      TextEditingController();
 
-  // Mobile money
-  final TextEditingController phone = TextEditingController();
+  String? _liveLocation;
 
-  bool _processing = false;
+  final List<String> pepStores = [
+    "PEP - East London CBD",
+    "PEP - Hemingways Mall",
+    "PEP - Mdantsane City",
+    "PEP - Beacon Bay",
+  ];
 
-  double get total => widget.totalPrice * 1.04; // tax included
+  final List<String> postNetStores = [
+    "PostNet - Vincent",
+    "PostNet - Beacon Bay",
+    "PostNet - Hemingways",
+    "PostNet - East London CBD",
+  ];
 
-  void _processPayment() async {
+  // 🔥 EFT
+  final TextEditingController _holder = TextEditingController();
+  final TextEditingController _card = TextEditingController();
+  final TextEditingController _expiry = TextEditingController();
+  final TextEditingController _cvv = TextEditingController();
+
+  bool _saveCard = true;
+
+  double get total => widget.totalPrice * 1.04;
+  
+  get Geolocator => null;
+
+  // 🔥 REAL LOCATION (MR D STYLE)
+  Future<void> _locateMe() async {
+
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Enable location services")),
+      );
+      return;
+    }
+
+    LocationPermission permission =
+        await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    Position pos = await Geolocator.getCurrentPosition();
+
+    setState(() {
+      _liveLocation =
+          "Lat: ${pos.latitude}, Lng: ${pos.longitude}";
+    });
+  }
+
+  // 🔥 PLACE ORDER (FIXED STRUCTURE)
+  void _placeOrder() {
+
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _processing = true);
+    String pickup;
 
-    await Future.delayed(const Duration(seconds: 2)); // simulate payment API
+    if (_pickupType == "PEP") {
+      if (_selectedPEP == null) return;
+      pickup = _selectedPEP!;
+    } else if (_pickupType == "PostNet") {
+      if (_selectedPostNet == null) return;
+      pickup = _selectedPostNet!;
+    } else {
+      pickup = _liveLocation ?? _customLocation.text;
+    }
 
-    setState(() => _processing = false);
+    orders.add({
+      "items": widget.cartItems.map((item) => {
+        "name": item.name,
+        "description": item.description,
+        "price": item.price,
+        "colors": item.colors,
+        "image": item.imagePath,
+      }).toList(),
+
+      "total": total,
+      "pickup": pickup,
+      "type": _pickupType,
+      "status": "Pending",
+
+      "payment": {
+        "method": "EFT",
+        "holder": _holder.text,
+        "card": _card.text,
+        "expiry": _expiry.text,
+        "save": _saveCard,
+      },
+    });
 
     showDialog(
       context: context,
-      barrierDismissible: false,
       builder: (_) => AlertDialog(
-        title: const Text("Payment Successful"),
-        content: const Text("Your order has been placed successfully."),
+        title: const Text("Order Successful"),
+        content: Text("Pickup: $pickup"),
         actions: [
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              Navigator.pop(context, true); // return success to previous page
+              Navigator.pop(context);
             },
             child: const Text("OK"),
-          )
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildOrderSummary() {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Order Summary",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-
-            ...widget.cartItems.map((item) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(child: Text(item.name)),
-                      Text("R${item.price * 1.04}"),
-                    ],
-                  ),
-                )),
-
-            const Divider(),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text("Total",
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                Text(
-                  "R${total.toStringAsFixed(2)}",
-                  style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPaymentMethod() {
+  // 🔥 ORDER ITEMS (WITH COLORS SHOWN)
+  Widget _items() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Payment Method",
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-
-        RadioListTile(
-          value: "Card",
-          groupValue: _selectedPaymentMethod,
-          onChanged: (val) => setState(() => _selectedPaymentMethod = val!),
-          title: const Text("Credit / Debit Card"),
+        const Text(
+          "Your Items",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
 
-        RadioListTile(
-          value: "Mobile",
-          groupValue: _selectedPaymentMethod,
-          onChanged: (val) => setState(() => _selectedPaymentMethod = val!),
-          title: const Text("Mobile Money"),
-        ),
+        const SizedBox(height: 10),
+
+        ...widget.cartItems.map((item) => Card(
+          child: ListTile(
+            leading: item.imagePath != null && item.imagePath!.isNotEmpty
+                ? Image.file(File(item.imagePath!.first), width: 50)
+                : const Icon(Icons.phone),
+
+            title: Text(item.name),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.description),
+                Wrap(
+                  spacing: 6,
+                  children: item.colors
+                      .map((c) => Chip(label: Text(c)))
+                      .toList(),
+                )
+              ],
+            ),
+            trailing: Text("R${item.price}"),
+          ),
+        )),
       ],
     );
   }
 
-  Widget _buildCardForm() {
+  // 🔥 PICKUP SECTION (FIXED)
+  Widget _pickup() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TextFormField(
-          controller: cardName,
-          decoration: const InputDecoration(labelText: "Card Holder Name"),
-          validator: (v) =>
-              v!.isEmpty ? "Enter card holder name" : null,
+
+        const Text("Pickup Method",
+            style: TextStyle(fontWeight: FontWeight.bold)),
+
+        RadioListTile(
+          value: "PEP",
+          groupValue: _pickupType,
+          onChanged: (v) => setState(() => _pickupType = v!),
+          title: const Text("PEP"),
         ),
-        TextFormField(
-          controller: cardNumber,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: "Card Number"),
-          validator: (v) =>
-              v!.length < 16 ? "Invalid card number" : null,
+
+        if (_pickupType == "PEP")
+          DropdownButtonFormField<String>(
+            value: _selectedPEP,
+            items: pepStores
+                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                .toList(),
+            onChanged: (v) => setState(() => _selectedPEP = v),
+          ),
+
+        RadioListTile(
+          value: "PostNet",
+          groupValue: _pickupType,
+          onChanged: (v) => setState(() => _pickupType = v!),
+          title: const Text("PostNet"),
         ),
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: expiry,
-                decoration: const InputDecoration(labelText: "MM/YY"),
-                validator: (v) =>
-                    v!.isEmpty ? "Required" : null,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TextFormField(
-                controller: cvv,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: "CVV"),
-                validator: (v) =>
-                    v!.length < 3 ? "Invalid CVV" : null,
-              ),
-            ),
-          ],
+
+        if (_pickupType == "PostNet")
+          DropdownButtonFormField<String>(
+            value: _selectedPostNet,
+            items: postNetStores
+                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                .toList(),
+            onChanged: (v) => setState(() => _selectedPostNet = v),
+          ),
+
+        RadioListTile(
+          value: "Location",
+          groupValue: _pickupType,
+          onChanged: (v) => setState(() => _pickupType = v!),
+          title: const Text("Use My Location"),
         ),
+
+        if (_pickupType == "Location") ...[
+          Text(_liveLocation ?? "No location yet"),
+
+          ElevatedButton.icon(
+            onPressed: _locateMe,
+            icon: const Icon(Icons.my_location),
+            label: const Text("Locate Me"),
+          ),
+        ],
       ],
     );
   }
 
-  Widget _buildMobileMoneyForm() {
-    return TextFormField(
-      controller: phone,
-      keyboardType: TextInputType.phone,
-      decoration: const InputDecoration(
-        labelText: "Mobile Number",
-        hintText: "+27...",
-      ),
-      validator: (v) =>
-          v!.length < 10 ? "Enter valid number" : null,
+  // 🔥 PAYMENT
+  Widget _payment() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+
+        const Text("EFT Payment",
+            style: TextStyle(fontWeight: FontWeight.bold)),
+
+        TextField(controller: _holder, decoration: const InputDecoration(labelText: "Account Holder")),
+        TextField(controller: _card, decoration: const InputDecoration(labelText: "Card Number")),
+        TextField(controller: _expiry, decoration: const InputDecoration(labelText: "Expiry")),
+        TextField(controller: _cvv, decoration: const InputDecoration(labelText: "CVV")),
+
+        CheckboxListTile(
+          value: _saveCard,
+          onChanged: (v) => setState(() => _saveCard = v!),
+          title: const Text("Save Card"),
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Checkout Payment"),
-      ),
-      body: SingleChildScrollView(
+      appBar: AppBar(title: const Text("Checkout")),
+
+      body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
-          child: Column(
+          child: ListView(
             children: [
-              _buildOrderSummary(),
+
+              _items(),
               const SizedBox(height: 20),
-              _buildPaymentMethod(),
-              const SizedBox(height: 10),
 
-              if (_selectedPaymentMethod == "Card")
-                _buildCardForm()
-              else
-                _buildMobileMoneyForm(),
+              _pickup(),
+              const SizedBox(height: 20),
 
-              const SizedBox(height: 30),
+              _payment(),
 
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _processing ? null : _processPayment,
-                  child: _processing
-                      ? const CircularProgressIndicator(
-                          color: Colors.white,
-                        )
-                      : Text("Pay R${total.toStringAsFixed(2)}"),
-                ),
+              const SizedBox(height: 20),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Total"),
+                  Text("R${total.toStringAsFixed(2)}"),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              ElevatedButton(
+                onPressed: _placeOrder,
+                child: const Text("Place Order"),
               ),
             ],
           ),

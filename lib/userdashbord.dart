@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'appscreen/models.dart';
 import 'dart:io';
 
-// Global list to store purchase history across the app
+// 🔥 GLOBAL ORDER HISTORY (ADMIN WILL UPDATE STATUS)
 List<Map<String, dynamic>> globalPurchaseHistory = [];
 
 class UserDashboard extends StatefulWidget {
@@ -31,11 +31,8 @@ class _UserDashboardState extends State<UserDashboard> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.shopping_bag_outlined,
-            size: 80,
-            color: Colors.grey[400],
-          ),
+          Icon(Icons.shopping_bag_outlined,
+              size: 80, color: Colors.grey[400]),
           const SizedBox(height: 16),
           Text(
             'No purchases yet',
@@ -48,20 +45,40 @@ class _UserDashboardState extends State<UserDashboard> {
           const SizedBox(height: 8),
           Text(
             'Your purchase history will appear here',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[500],
-            ),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: () {
-              // Navigate to shop - this will be implemented when navigation is set up
-              Navigator.of(context).pushNamed('/shop');
-            },
-            child: const Text('Start Shopping'),
+            style: TextStyle(fontSize: 14, color: Colors.grey[500]),
           ),
         ],
+      ),
+    );
+  }
+
+  // 🔥 STATUS BADGE (IMPORTANT FOR ADMIN CONTROL)
+  Widget _statusBadge(String status) {
+    Color color;
+
+    switch (status) {
+      case "Shipped":
+        color = Colors.green;
+        break;
+      case "Pending":
+      default:
+        color = Colors.orange;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        status,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 12,
+        ),
       ),
     );
   }
@@ -72,25 +89,27 @@ class _UserDashboardState extends State<UserDashboard> {
       children: [
         const Text(
           'Purchase History',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 16),
+
         ...globalPurchaseHistory.map((purchase) {
           final items = purchase['items'] as List<Models>;
           final totalPrice = purchase['totalPrice'] as int;
           final purchaseDate = purchase['date'] as DateTime;
+          final status = purchase['status'] ?? "Pending";
+          final pickup = purchase['pickup'] ?? "Not set";
 
           return Card(
             margin: const EdgeInsets.only(bottom: 16),
-            elevation: 3,
+            elevation: 4,
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+
+                  // 🔥 HEADER + STATUS
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -101,68 +120,75 @@ class _UserDashboardState extends State<UserDashboard> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      Text(
-                        '${purchaseDate.day}/${purchaseDate.month}/${purchaseDate.year}',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                        ),
-                      ),
+
+                      _statusBadge(status),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Items Purchased:',
+
+                  const SizedBox(height: 6),
+
+                  Text(
+                    '${purchaseDate.day}/${purchaseDate.month}/${purchaseDate.year}',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  Text(
+                    "Pickup: $pickup",
                     style: TextStyle(
-                      fontWeight: FontWeight.w500,
+                      color: Colors.grey[700],
+                      fontSize: 13,
                     ),
                   ),
+
+                  const SizedBox(height: 12),
+
+                  const Text(
+                    'Items:',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+
                   const SizedBox(height: 8),
+
                   ...items.map((item) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        padding: const EdgeInsets.symmetric(vertical: 6),
                         child: Row(
                           children: [
+
                             if (item.imagePath != null)
                               Container(
-                                width: 40,
-                                height: 40,
+                                width: 45,
+                                height: 45,
                                 margin: const EdgeInsets.only(right: 12),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
                                 child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(4),
+                                  borderRadius: BorderRadius.circular(6),
                                   child: Image.file(
-                                    File(item.imagePath!),
+                                    File(item.imagePath! as String),
                                     fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
-                                        color: Colors.grey[300],
-                                        child: const Icon(
-                                          Icons.image_not_supported,
-                                          size: 20,
-                                        ),
-                                      );
-                                    },
+                                    errorBuilder: (c, e, s) => Container(
+                                      color: Colors.grey[300],
+                                      child: const Icon(Icons.phone_android),
+                                    ),
                                   ),
                                 ),
                               )
                             else
                               Container(
-                                width: 40,
-                                height: 40,
+                                width: 45,
+                                height: 45,
                                 margin: const EdgeInsets.only(right: 12),
                                 decoration: BoxDecoration(
                                   color: Colors.grey[300],
-                                  borderRadius: BorderRadius.circular(4),
+                                  borderRadius: BorderRadius.circular(6),
                                 ),
-                                child: const Icon(
-                                  Icons.phone_android,
-                                  size: 20,
-                                ),
+                                child: const Icon(Icons.phone_android),
                               ),
+
                             Expanded(
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     item.name,
@@ -171,10 +197,9 @@ class _UserDashboardState extends State<UserDashboard> {
                                     ),
                                   ),
                                   Text(
-                                    '\$${item.price}',
+                                    "R${item.price}",
                                     style: TextStyle(
                                       color: Colors.green[700],
-                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ],
@@ -183,21 +208,19 @@ class _UserDashboardState extends State<UserDashboard> {
                           ],
                         ),
                       )),
+
                   const Divider(),
+
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
                         'Total:',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        '\$$totalPrice',
+                        'R$totalPrice',
                         style: const TextStyle(
-                          fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: Colors.green,
                         ),
