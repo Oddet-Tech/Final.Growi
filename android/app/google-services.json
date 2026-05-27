@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "126687330758",
+    "firebase_url": "https://growi-1-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "growi-1",
+    "storage_bucket": "growi-1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:126687330758:android:258dbe6177d6a07ad772c7",
+        "android_client_info": {
+          "package_name": "com.example.growi_project"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "126687330758-i9i4jdm50kekhof018cn288sjqvj0nho.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCURtL-kQ8Js-8ldCR24bvp2ZHuQkAuvk8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "126687330758-i9i4jdm50kekhof018cn288sjqvj0nho.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

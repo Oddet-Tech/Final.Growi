@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:growi_project/Userpurchase.dart';
+import 'package:growi_project/admin.dart';
 
 class IStoreScreen extends StatelessWidget {
   const IStoreScreen({super.key});
@@ -31,7 +32,7 @@ class IStoreScreen extends StatelessWidget {
     border: Border.all(width: 2, color: Colors.black),
     borderRadius: BorderRadius.circular(12),
     image: const DecorationImage(
-      image: AssetImage('assets/iphone.webp'),
+      image: AssetImage('assets/Clothing.png'),
       fit: BoxFit.contain, 
       alignment: Alignment.center, 
       opacity: 0.30,
@@ -64,7 +65,7 @@ class IStoreScreen extends StatelessWidget {
     border: Border.all(width: 2, color: Colors.black),
     borderRadius: BorderRadius.circular(12),
     image: const DecorationImage(
-      image: AssetImage('Assets/sneeker.png'),
+      image: AssetImage('assets/sneeker.png'),
       fit: BoxFit.contain, 
       alignment: Alignment.center, 
       opacity: 0.35,

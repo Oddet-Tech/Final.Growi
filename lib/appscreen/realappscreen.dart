@@ -1,7 +1,9 @@
 
 import 'package:flutter/material.dart';
+import 'package:growi_project/appscreen/Form.dart';
 import 'package:growi_project/appscreen/homescreen.dart';
 import 'package:growi_project/appscreen/store.dart';
+import 'package:growi_project/appscreen/thetick.dart';
 import 'package:growi_project/appscreen/ticketstab.dart';
 import 'package:growi_project/userdashbord.dart';
 
@@ -115,10 +117,11 @@ class _RealHomeState extends State<RealHome> {
               title: 'Update Profile',
               onTap: () {},
             ),
+           
             _drawerItem(
               icon: Icons.confirmation_number_outlined,
               title: 'Organize Event',
-              onTap: () {},
+              onTap: () {Navigator.push(context, MaterialPageRoute(builder: (context)=>EventApplicationPage()));},
             ),
             //this will  later be used to create a business for the user to sell their products in the app
             /*      

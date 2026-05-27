@@ -3,55 +3,24 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:growi_project/services/firebase_service.dart';
 import 'package:growi_project/appscreen/models.dart';
 
-class UserDashboard extends StatefulWidget {
-  const UserDashboard({super.key});
+class AdminOrderManagement extends StatefulWidget {
+  const AdminOrderManagement({super.key});
 
   @override
-  State<UserDashboard> createState() => _UserDashboardState();
+  State<AdminOrderManagement> createState() => _AdminOrderManagementState();
 }
 
-class _UserDashboardState extends State<UserDashboard> {
+class _AdminOrderManagementState extends State<AdminOrderManagement> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  String selectedStatus = 'All'; // All, Pending, Shipped, Delivered
-  final List<String> statusFilters = ['All', 'Pending', 'Shipped', 'Delivered'];
+  String selectedStatus = 'All';
+  final List<String> statusFilters = ['All', 'Pending', 'Shipped', 'Delivered', 'Cancelled'];
 
   @override
   Widget build(BuildContext context) {
-    final currentUser = _auth.currentUser;
-
-    if (currentUser == null) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('My Orders'),
-          backgroundColor: const Color(0xFF1F7A4C),
-        ),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.login,
-                size: 80,
-                color: Colors.grey[400],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Please log in to view your orders',
-                style: TextStyle(
-                  fontSize: 18,
-                  color: Colors.grey[600],
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8EED2),
       appBar: AppBar(
-        title: const Text('My Orders'),
+        title: const Text('Order Management'),
         backgroundColor: const Color(0xFF1F7A4C),
         elevation: 0,
       ),
@@ -88,7 +57,7 @@ class _UserDashboardState extends State<UserDashboard> {
           // Orders list
           Expanded(
             child: StreamBuilder<List<Order>>(
-              stream: FirebaseService.streamUserOrders(currentUser.uid),
+              stream: FirebaseService.streamAllOrders(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
@@ -110,7 +79,27 @@ class _UserDashboardState extends State<UserDashboard> {
                     : allOrders.where((order) => order.status == selectedStatus).toList();
 
                 if (filteredOrders.isEmpty) {
-                  return _buildEmptyState();
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.shopping_bag_outlined,
+                          size: 80,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No Orders',
+                          style: TextStyle(
+                            fontSize: 20,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
                 }
 
                 return ListView.builder(
@@ -129,40 +118,6 @@ class _UserDashboardState extends State<UserDashboard> {
     );
   }
 
-  /// Empty state widget
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.shopping_bag_outlined,
-            size: 80,
-            color: Colors.grey[400],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No Orders Yet',
-            style: TextStyle(
-              fontSize: 20,
-              color: Colors.grey[600],
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Your orders will appear here',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[500],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Build order card
   Widget _buildOrderCard(Order order) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -209,8 +164,20 @@ class _UserDashboardState extends State<UserDashboard> {
         ),
         trailing: _statusBadge(order.status),
         children: [
-          // Order items
           const Divider(),
+          const Text(
+            'Customer Information:',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          const SizedBox(height: 8),
+          _buildDetailRow('User ID:', order.userId),
+          const SizedBox(height: 8),
+          _buildDetailRow('Order Date:', _formatDate(order.orderDate)),
+          const SizedBox(height: 8),
+          _buildDetailRow('Pickup Store:', order.locationInfo.storeName),
+          const SizedBox(height: 8),
+          _buildDetailRow('Delivery Type:', order.locationInfo.storeType),
+          const SizedBox(height: 16),
           const Text(
             'Items:',
             style: TextStyle(fontWeight: FontWeight.bold),
@@ -227,61 +194,26 @@ class _UserDashboardState extends State<UserDashboard> {
                         children: [
                           Text(
                             item.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w500,
-                            ),
+                            style: const TextStyle(fontWeight: FontWeight.w500),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
                             'Color: ${item.color}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
+                            style: const TextStyle(fontSize: 12, color: Colors.grey),
                           ),
                         ],
                       ),
                     ),
                     Text(
                       'R${item.price.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
               )),
           const Divider(),
-          // Order details
           const SizedBox(height: 8),
-          _buildDetailRow('Order Date:', _formatDate(order.orderDate)),
-          const SizedBox(height: 8),
-          _buildDetailRow('Status:', order.status),
-          const SizedBox(height: 8),
-          _buildDetailRow(
-            'Pickup Store:',
-            order.locationInfo.storeName,
-          ),
-          const SizedBox(height: 8),
-          _buildDetailRow(
-            'Delivery Type:',
-            order.locationInfo.storeType,
-          ),
-          const SizedBox(height: 8),
-          _buildDetailRow(
-            'Card:',
-            order.paymentInfo.getMaskedCardNumber(),
-          ),
-          if (order.trackingNumber != null) ...[
-            const SizedBox(height: 8),
-            _buildDetailRow(
-              'Tracking #:',
-              order.trackingNumber!,
-            ),
-          ],
-          const SizedBox(height: 16),
-          // Cost breakdown
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -326,29 +258,56 @@ class _UserDashboardState extends State<UserDashboard> {
               ],
             ),
           ),
-          if (order.status == 'Pending') ...[
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.shade300),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info, color: Colors.orange.shade700),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Your order is being processed. You will receive an email once it\'s shipped.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.orange.shade900,
-                      ),
-                    ),
+          const SizedBox(height: 16),
+          // Status management
+          const Text(
+            'Update Status:',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          const SizedBox(height: 12),
+          if (order.status == 'Pending')
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                ],
+                ),
+                onPressed: () => _markAsShipped(order),
+                child: const Text('Mark as Shipped'),
+              ),
+            ),
+          if (order.status == 'Shipped') ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                onPressed: () => _markAsDelivered(order),
+                child: const Text('Mark as Delivered'),
+              ),
+            ),
+          ],
+          if (order.status != 'Cancelled' && order.status != 'Delivered') ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                onPressed: () => _cancelOrder(order),
+                child: const Text('Cancel Order'),
               ),
             ),
           ],
@@ -357,7 +316,129 @@ class _UserDashboardState extends State<UserDashboard> {
     );
   }
 
-  /// Status badge widget
+  Future<void> _markAsShipped(Order order) async {
+    final trackingController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Mark as Shipped'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: trackingController,
+              decoration: const InputDecoration(
+                labelText: 'Tracking Number (Optional)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                await FirebaseService.updateOrderStatus(
+                  order.id,
+                  'Shipped',
+                  trackingNumber: trackingController.text.isNotEmpty
+                      ? trackingController.text
+                      : null,
+                );
+
+                if (!mounted) return;
+                Navigator.pop(context);
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Order marked as shipped'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error: $e')),
+                );
+              }
+            },
+            child: const Text('Update'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _markAsDelivered(Order order) async {
+    try {
+      await FirebaseService.updateOrderStatus(
+        order.id,
+        'Delivered',
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Order marked as delivered'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+
+  Future<void> _cancelOrder(Order order) async {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel Order'),
+        content: const Text('Are you sure you want to cancel this order?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('No'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                await FirebaseService.updateOrderStatus(
+                  order.id,
+                  'Cancelled',
+                  notes: 'Cancelled by admin',
+                );
+
+                if (!mounted) return;
+                Navigator.pop(context);
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Order cancelled'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error: $e')),
+                );
+              }
+            },
+            child: const Text('Cancel Order'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _statusBadge(String status) {
     Color backgroundColor;
     Color textColor = Colors.white;
@@ -396,31 +477,25 @@ class _UserDashboardState extends State<UserDashboard> {
     );
   }
 
-  /// Detail row widget
   Widget _buildDetailRow(String label, String value) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.grey,
-            fontSize: 13,
-          ),
+          style: const TextStyle(color: Colors.grey, fontSize: 13),
         ),
-        Text(
-          value,
-          style: const TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: 13,
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+            textAlign: TextAlign.end,
           ),
-          textAlign: TextAlign.end,
         ),
       ],
     );
   }
 
-  /// Format date
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
