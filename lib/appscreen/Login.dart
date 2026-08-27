@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:growi_project/appscreen/forgotpass.dart';
 import 'package:growi_project/appscreen/realappscreen.dart';
 import 'package:growi_project/admin.dart';
+import 'package:growi_project/services/auth_service.dart';
 
 class SecondScreen extends StatefulWidget {
   const SecondScreen({super.key});
@@ -21,157 +23,166 @@ class _SecondScreenState extends State<SecondScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  StreamSubscription<User?>? _authSubscription;
+  bool _waitingForEmailVerification = false;
   bool _isLoading = false;
 
-  // =========================
-  // CHECK IF USER IS ADMIN
-  // =========================
+//check if user is admin
   Future<bool> _isAdminUser(String uid) async {
-    try {
-      final adminDoc =
-          await _firestore.collection('admins').doc(uid).get();
+  try {
+    debugPrint("Checking admin for UID: $uid");
 
-      return adminDoc.exists;
-    } catch (e) {
-      debugPrint("Admin Check Error: $e");
-      return false;
+    final adminDoc =
+        await FirebaseFirestore.instance
+            .collection('admins')
+            .doc(uid)
+            .get();
+
+    debugPrint("Document exists: ${adminDoc.exists}");
+
+    if (adminDoc.exists) {
+      debugPrint(adminDoc.data().toString());
     }
-  }
 
-  // =========================
-  // CHECK IF USER PROFILE EXISTS
-  // =========================
+    return adminDoc.exists;
+  } catch (e) {
+    debugPrint("Admin Error: $e");
+    return false;
+  }
+}
+  //check if user account exists
   Future<DocumentSnapshot?> _getUserProfile(String uid) async {
     try {
-      // FIRST PROFILE COLLECTION
       final userDoc =
           await _firestore.collection('users').doc(uid).get();
-
       if (userDoc.exists) {
         return userDoc;
       }
-
-      // SECOND PROFILE COLLECTION
       final customerDoc =
           await _firestore.collection('customers').doc(uid).get();
-
       if (customerDoc.exists) {
         return customerDoc;
       }
-
-      // NO PROFILE FOUND
       return null;
     } catch (e) {
       debugPrint("Profile Check Error: $e");
       return null;
     }
   }
-
-  // =========================
-  // LOGIN FUNCTION
-  // =========================
-  Future<void> _handleLogin() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      final email = emailController.text.trim();
-      final password = passwordController.text.trim();
-
-      // LOGIN WITH FIREBASE AUTH
-      final UserCredential userCredential =
-          await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      final User? user = userCredential.user;
-
-      if (user == null) {
-        throw Exception("User not found");
-      }
-
-      // =========================
-      // CHECK ADMIN
-      // =========================
-      final bool isAdmin = await _isAdminUser(user.uid);
-
-      if (isAdmin) {
-        if (!mounted) return;
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const Admin(),
-          ),
-        );
-
-        return;
-      }
-
-      // =========================
-      // CHECK USER PROFILE
-      // =========================
-      final profileDoc = await _getUserProfile(user.uid);
-
-      // NO PROFILE FOUND
-      if (profileDoc == null) {
-        await _auth.signOut();
-
-        if (!mounted) return;
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'No profile account found for this user.',
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-
-        return;
-      }
-
-      // =========================
-      // GET USER DATA
-      // =========================
-      final data = profileDoc.data() as Map<String, dynamic>;
-
-      final String userName = data['name'] ?? 'User';
-      final String userEmail = data['email'] ?? email;
-
-      // =========================
-      // GO TO HOME SCREEN
-      // =========================
+  Future<void> _ensureUserProfile(User user, String fallbackEmail) async {
+    await AuthService.ensureUserProfile(user, fallbackEmail: fallbackEmail);
+  }
+  Future<void> _handleAuthStateChanged(User? user) async {
+    if (!mounted || user == null || !_waitingForEmailVerification) {
+      return;
+    }
+    await user.reload();
+    final refreshedUser = _auth.currentUser;
+    if (refreshedUser == null || !refreshedUser.emailVerified) {
+      return;
+    }
+    await _firestore.collection('users').doc(refreshedUser.uid).set(
+  {
+    'emailVerified': true,
+  },
+  SetOptions(merge: true),
+);
+    _waitingForEmailVerification = false;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Email verified successfully. Access granted.'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 4),
+      ),
+    );
+    await _navigateAfterAuthentication(refreshedUser, refreshedUser.email ?? '');
+  }
+  Future<void> _navigateAfterAuthentication(User user, String fallbackEmail) async {
+   final bool isAdmin = await _isAdminUser(user.uid);
+    debugPrint("Is Admin: $isAdmin");
+    if (isAdmin) {
       if (!mounted) return;
-
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => RealHome(
-            name: userName,
-            email: userEmail,
-          ),
+          builder: (context) => const Admin(),
         ),
       );
+      return;
+    }
+    await _ensureUserProfile(user, fallbackEmail);
+    final profileDoc = await _getUserProfile(user.uid);
+    final data = (profileDoc?.data() as Map<String, dynamic>?) ?? <String, dynamic>{};
+    final String userName = (data['name'] ??
+        data['fullName'] ??
+        data['displayName'] ??
+        user.displayName ??
+        '')
+      .toString();
+    final String userEmail = (data['email'] ?? fallbackEmail).toString();
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RealHome(
+          name: userName,
+          email: userEmail,
+        ),
+      ),
+    );
+  }
+
+
+  Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
+    try {
+      final email = emailController.text.trim();
+      final password = passwordController.text.trim();
+      // LOGIN WITH FIREBASE AUTH
+      final UserCredential userCredential =
+          await AuthService.signIn(
+        email: email,
+        password: password,
+      );
+      final User? user = userCredential.user;
+      if (user == null) {
+        throw Exception("User not found");
+      }
+      await user.reload();
+      final refreshedUser = _auth.currentUser;
+      final currentUser = refreshedUser ?? user;
+    if (!currentUser.emailVerified){
+        await user.sendEmailVerification();
+        await _auth.signOut();
+        if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+          _waitingForEmailVerification = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Please verify your email before logging in. '
+              'A verification email has been sent to your address.',
+            ),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 6),
+          ),
+        );
+
+        return;
+      }
+
+      await _navigateAfterAuthentication(currentUser, email);
     }
 
     // =========================
     // FIREBASE AUTH ERRORS
     // =========================
     on FirebaseAuthException catch (e) {
-      String errorMessage = "Login failed";
-
-      if (e.code == 'user-not-found') {
-        errorMessage = "No account found with this email";
-      } else if (e.code == 'wrong-password') {
-        errorMessage = "Incorrect password";
-      } else if (e.code == 'invalid-email') {
-        errorMessage = "Invalid email address";
-      } else if (e.code == 'invalid-credential') {
-        errorMessage = "Incorrect email or password";
-      }
+      final errorMessage = AuthService.getFriendlyError(e);
 
       if (!mounted) return;
 
@@ -205,7 +216,14 @@ class _SecondScreenState extends State<SecondScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _authSubscription = _auth.authStateChanges().listen(_handleAuthStateChanged);
+  }
+
+  @override
   void dispose() {
+    _authSubscription?.cancel();
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
@@ -248,9 +266,10 @@ class _SecondScreenState extends State<SecondScreen> {
                         border: OutlineInputBorder(),
                       ),
                       validator: (value) {
-                        if (value == null ||
-                            value.isEmpty ||
-                            !value.contains('@')) {
+                        final email = value?.trim() ?? '';
+                        if (!RegExp(
+                          r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
+                        ).hasMatch(email)) {
                           return 'Invalid email address';
                         }
 

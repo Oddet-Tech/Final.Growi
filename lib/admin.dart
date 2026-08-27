@@ -1327,11 +1327,11 @@ class _UserPurchaseState extends State<UserPurchase> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8EED2),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Color(0xFFF8EED2),
         elevation: 0,
         centerTitle: true,
         title: const Text(
-          "iSupply Store",
+          "Growi Dress Store",
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
         actions: [

@@ -11,7 +11,6 @@ class AdminOrderManagement extends StatefulWidget {
 }
 
 class _AdminOrderManagementState extends State<AdminOrderManagement> {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
   String selectedStatus = 'All';
   final List<String> statusFilters = ['All', 'Pending', 'Shipped', 'Delivered', 'Cancelled'];
 

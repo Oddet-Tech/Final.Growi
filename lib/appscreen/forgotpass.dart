@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:growi_project/services/auth_service.dart';
 
 class ForgotPass extends StatefulWidget {
   const ForgotPass({super.key});
@@ -14,11 +15,6 @@ class _ForgotPassState extends State<ForgotPass> {
 
   final TextEditingController emailController =
       TextEditingController();
-
-  // ================= FIREBASE =================
-
-  final FirebaseAuth _auth =
-      FirebaseAuth.instance;
 
   // ================= VARIABLES =================
 
@@ -58,9 +54,7 @@ class _ForgotPassState extends State<ForgotPass> {
 
       // ================= SEND RESET EMAIL =================
 
-      await _auth.sendPasswordResetEmail(
-        email: email,
-      );
+      await AuthService.resetPassword(email);
 
       if (!mounted) return;
 
@@ -91,25 +85,7 @@ class _ForgotPassState extends State<ForgotPass> {
 
     on FirebaseAuthException catch (e) {
 
-      String errorMessage;
-
-      switch (e.code) {
-
-        case 'user-not-found':
-          errorMessage =
-              "No account found with this email.";
-          break;
-
-        case 'invalid-email':
-          errorMessage =
-              "Invalid email address.";
-          break;
-
-        default:
-          errorMessage =
-              e.message ??
-              "Something went wrong.";
-      }
+      final errorMessage = AuthService.getFriendlyError(e);
 
       setState(() {
 
@@ -159,6 +135,16 @@ class _ForgotPassState extends State<ForgotPass> {
 
       backgroundColor:
           const Color(0xFFF8EED2),
+
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF8EED2),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+          tooltip: 'Back',
+        ),
+      ),
 
       body: Center(
 

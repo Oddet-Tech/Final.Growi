@@ -1,38 +1,68 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
-
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
-
-  <!-- iOS meta tags & icons -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Growi app">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="growi_project">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
-
-  <title>growi_project</title>
+  <title>Growi</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    :root { color-scheme: light; }
+    body {
+      margin: 0;
+      background: #f8eed2;
+      color: #111;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .loading-screen {
+      text-align: center;
+    }
+    .logo {
+      width: 150px;
+      height: 150px;
+      object-fit: contain;
+      animation: bounce 700ms ease-in-out infinite alternate;
+    }
+    .loading-text {
+      margin-top: 20px;
+      font: 20px sans-serif;
+    }
+    .loading-text::after {
+      content: '';
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      margin-left: 8px;
+      vertical-align: -1px;
+      border: 2px solid rgba(17, 17, 17, 0.25);
+      border-top-color: #111;
+      border-radius: 50%;
+      animation: spin 800ms linear infinite;
+    }
+    @keyframes bounce {
+      from { transform: translateY(0); }
+      to { transform: translateY(-12px); }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
 </head>
 <body>
+  <div class="loading-screen">
+    <img class="logo" src="assets/assets/Icon.png" alt="Growi logo">
+    <div class="loading-text">Loading</div>
+  </div>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

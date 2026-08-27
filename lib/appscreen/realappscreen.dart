@@ -1,10 +1,11 @@
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:growi_project/appscreen/Form.dart';
 import 'package:growi_project/appscreen/homescreen.dart';
 import 'package:growi_project/appscreen/store.dart';
-import 'package:growi_project/appscreen/thetick.dart';
 import 'package:growi_project/appscreen/ticketstab.dart';
+import 'package:growi_project/services/auth_service.dart';
 import 'package:growi_project/userdashbord.dart';
 
 
@@ -17,6 +18,157 @@ class RealHome extends StatefulWidget {
   State<RealHome> createState() => _RealHomeState();
 }
 class _RealHomeState extends State<RealHome> {
+  final TextEditingController _currentPasswordController = TextEditingController();
+  final TextEditingController _newPasswordController = TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
+  bool _isChangingPassword = false;
+
+  bool get _newPasswordMeetsRules =>
+      _newPasswordController.text.trim().length >= 6;
+
+  bool get _passwordsAreValid =>
+      _newPasswordMeetsRules &&
+      _newPasswordController.text.trim() ==
+          _confirmPasswordController.text.trim();
+
+  void _handlePasswordInputChanged() {
+    if (_passwordsAreValid) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+    }
+  }
+
+  @override
+  void dispose() {
+    _currentPasswordController.dispose();
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _changePassword() async {
+    ScaffoldMessenger.of(context).clearSnackBars();
+
+    final currentPassword = _currentPasswordController.text.trim();
+    final newPassword = _newPasswordController.text.trim();
+    final confirmPassword = _confirmPasswordController.text.trim();
+
+    if (currentPassword.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill in all password fields.')),
+      );
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('New password must be at least 6 characters.')),
+      );
+      return;
+    }
+
+    if (newPassword != confirmPassword) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('New passwords do not match.')),
+      );
+      return;
+    }
+
+    setState(() => _isChangingPassword = true);
+
+    try {
+      await AuthService.changePassword(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
+
+      if (!mounted) return;
+
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password change Succesfull')),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AuthService.getFriendlyError(e))),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to change password: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isChangingPassword = false);
+      }
+    }
+  }
+
+  void _showChangePasswordDialog() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Change Password'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: _currentPasswordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(labelText: 'Current Password'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _newPasswordController,
+                      obscureText: true,
+                      onChanged: (_) {
+                        setDialogState(() {});
+                        _handlePasswordInputChanged();
+                      },
+                      decoration: const InputDecoration(labelText: 'New Password'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _confirmPasswordController,
+                      obscureText: true,
+                      onChanged: (_) {
+                        setDialogState(() {});
+                        _handlePasswordInputChanged();
+                      },
+                      decoration: const InputDecoration(labelText: 'Confirm New Password'),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: _isChangingPassword || !_passwordsAreValid
+                      ? null
+                      : _changePassword,
+                  child: _isChangingPassword
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +215,10 @@ class _RealHomeState extends State<RealHome> {
     );
   }
   Drawer _buildDrawer() {
+    final accountName = widget.name.trim().isNotEmpty
+        ? widget.name.trim()
+        : (FirebaseAuth.instance.currentUser?.displayName ?? '').trim();
+
     return Drawer(
       child: SafeArea(
         child: Column(
@@ -90,7 +246,7 @@ class _RealHomeState extends State<RealHome> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        widget.name.isNotEmpty ? widget.name : 'User',
+                        accountName,
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -113,9 +269,12 @@ class _RealHomeState extends State<RealHome> {
               onTap: () { Navigator.push(context, MaterialPageRoute(builder: (context) => const  UserDashboard()));},
             ),
             _drawerItem(
-              icon: Icons.person_outline,
-              title: 'Update Profile',
-              onTap: () {},
+              icon: Icons.lock_outline,
+              title: 'Change Password',
+              onTap: () {
+                Navigator.pop(context);
+                _showChangePasswordDialog();
+              },
             ),
            
             _drawerItem(
@@ -160,7 +319,10 @@ class _RealHomeState extends State<RealHome> {
                    content: const Text('Are you sure you want to logout?'),
                    actions: [
                      TextButton(
-                       onPressed: () {
+                       onPressed: () async {
+                         Navigator.pop(context);
+                         await FirebaseAuth.instance.signOut();
+                         if (!mounted) return;
                          Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const HomePage()), (route) => false);
                        },
                        child: const Text('Yes'),

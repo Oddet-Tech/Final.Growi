@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:growi_project/services/auth_service.dart';
+import 'package:growi_project/appscreen/realappscreen.dart';
 
 class NewAccountScreen extends StatefulWidget {
   const NewAccountScreen({super.key});
@@ -28,14 +31,6 @@ class _NewAccountScreenState
       confirmPasswordController =
       TextEditingController();
 
-  // ================= FIREBASE =================
-
-  final FirebaseAuth _auth =
-      FirebaseAuth.instance;
-
-  final FirebaseFirestore _firestore =
-      FirebaseFirestore.instance;
-
   // ================= VARIABLES =================
 
   bool _isLoading = false;
@@ -43,13 +38,19 @@ class _NewAccountScreenState
   bool _obscurePassword = true;
 
   bool _obscureConfirm = true;
+  Timer? _verificationTimer;
+  bool _verificationComplete = false;
 
   String? _errorMessage;
+
+  String? _infoMessage;
 
   // ================= DISPOSE =================
 
   @override
   void dispose() {
+
+    _verificationTimer?.cancel();
 
     fullNameController.dispose();
 
@@ -60,6 +61,43 @@ class _NewAccountScreenState
     confirmPasswordController.dispose();
 
     super.dispose();
+  }
+
+  void _watchForVerification(User user, String fallbackName, String email) {
+    _verificationTimer?.cancel();
+    _verificationTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _checkEmailVerification(user, fallbackName, email),
+    );
+  }
+
+  Future<void> _checkEmailVerification(
+    User user,
+    String fallbackName,
+    String email,
+  ) async {
+    try {
+      await user.reload();
+      final refreshedUser = FirebaseAuth.instance.currentUser;
+      if (refreshedUser == null || !refreshedUser.emailVerified || _verificationComplete) {
+        return;
+      }
+
+      _verificationComplete = true;
+      _verificationTimer?.cancel();
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => RealHome(
+            name: refreshedUser.displayName ?? fallbackName,
+            email: refreshedUser.email ?? email,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Email verification check error: $e');
+    }
   }
 
   // ================= CREATE ACCOUNT =================
@@ -84,14 +122,19 @@ class _NewAccountScreenState
 
     // ================= VALIDATION =================
 
+    final emailIsValid = RegExp(
+      r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
+    ).hasMatch(email);
+
     if (fullName.isEmpty ||
-        email.isEmpty ||
+        !emailIsValid ||
         password.isEmpty ||
         confirmPassword.isEmpty) {
 
       setState(() {
-        _errorMessage =
-            "Please fill in all fields.";
+        _errorMessage = !emailIsValid
+            ? "Please enter a valid email address."
+            : "Please fill in all fields.";
       });
 
       return;
@@ -119,17 +162,18 @@ class _NewAccountScreenState
 
     setState(() {
       _isLoading = true;
+      _infoMessage =
+          'Creating your account... A verification email will be sent to $email.\nPlease check your inbox and spam folder.';
     });
 
     try {
-
       // ================= CREATE USER =================
 
       final UserCredential credential =
-          await _auth
-              .createUserWithEmailAndPassword(
+          await AuthService.createAccount(
         email: email,
         password: password,
+        fullName: fullName,
       );
 
       final User? user = credential.user;
@@ -140,97 +184,42 @@ class _NewAccountScreenState
         );
       }
 
-      // ================= UPDATE DISPLAY NAME =================
+      if (!mounted) return;
 
-      await user.updateDisplayName(
-        fullName,
-      );
-
-      // ================= SAVE TO FIRESTORE =================
-
-      await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .set({
-
-        'uid': user.uid,
-
-        'fullName': fullName,
-
-        'email': email,
-
-        'createdAt':
-            FieldValue.serverTimestamp(),
-
-        'emailVerified': false,
+      setState(() {
+        _isLoading = false;
+        _infoMessage = "we've sent you an Email for Verification";
       });
 
-      // ================= SEND VERIFICATION EMAIL =================
-
-      await user.sendEmailVerification();
-
-      // ================= SIGN OUT USER =================
-
-      await _auth.signOut();
-
-      if (!mounted) return;
+      _watchForVerification(user, fullName, email);
 
       // ================= SUCCESS MESSAGE =================
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: Colors.green,
-
-          duration:
-              const Duration(seconds: 5),
-
+          duration: const Duration(seconds: 4),
           content: Text(
-            "Account created successfully.\n"
-            "A verification email was sent to:\n$email\n\n"
-            "Please verify your email before logging in.",
+            "we've sent you an Email for Verification\n$email",
           ),
         ),
       );
 
       // ================= RETURN TO LOGIN =================
 
-      Navigator.pop(context);
-
+      // Keep the user on the verification message screen
+      // so they can see the email instructions clearly.
     }
 
     // ================= FIREBASE ERRORS =================
 
     on FirebaseAuthException catch (e) {
 
-      String message;
-
-      switch (e.code) {
-
-        case 'email-already-in-use':
-          message =
-              "An account with this email already exists.";
-          break;
-
-        case 'invalid-email':
-          message =
-              "Please enter a valid email address.";
-          break;
-
-        case 'weak-password':
-          message =
-              "Password is too weak.";
-          break;
-
-        default:
-          message =
-              e.message ??
-              "Something went wrong.";
-      }
+      final message = AuthService.getFriendlyError(e);
 
       setState(() {
         _errorMessage = message;
+        _infoMessage = null;
       });
     }
 
@@ -241,6 +230,7 @@ class _NewAccountScreenState
       setState(() {
         _errorMessage =
             "Unexpected error: $e";
+        _infoMessage = null;
       });
     }
 
@@ -480,17 +470,10 @@ class _NewAccountScreenState
 
                             : Colors.red,
                   ),
-
                   const SizedBox(width: 6),
-
                   Text(
-
-                    passwordController.text ==
-                            confirmPasswordController
-                                .text
-
+                    passwordController.text ==confirmPasswordController.text
                         ? "Passwords match"
-
                         : "Passwords do not match",
 
                     style: TextStyle(
@@ -509,50 +492,32 @@ class _NewAccountScreenState
                   ),
                 ],
               ),
-
-            // ================= ERROR MESSAGE =================
-
             if (_errorMessage != null) ...[
-
               const SizedBox(height: 10),
-
               Container(
-
                 padding:
                     const EdgeInsets.all(12),
-
                 decoration: BoxDecoration(
-
                   color:
                       Colors.red.shade50,
-
                   borderRadius:
                       BorderRadius.circular(8),
-
                   border: Border.all(
                     color:
                         Colors.red.shade200,
                   ),
                 ),
-
                 child: Row(
-
                   children: [
-
                     const Icon(
                       Icons.error_outline,
                       color: Colors.red,
                       size: 18,
                     ),
-
                     const SizedBox(width: 8),
-
                     Expanded(
-
                       child: Text(
-
                         _errorMessage!,
-
                         style:
                             const TextStyle(
                           color: Colors.red,
@@ -564,79 +529,81 @@ class _NewAccountScreenState
                 ),
               ),
             ],
-
             const SizedBox(height: 24),
-
-            // ================= CREATE BUTTON =================
-
+            if (_infoMessage != null) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  border: Border.all(color: Colors.green.shade300),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green.shade700),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _infoMessage!,
+                        style: TextStyle(
+                          color: Colors.green.shade900,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             Padding(
-
               padding:
                   const EdgeInsets.symmetric(
                 horizontal: 40,
               ),
-
               child: ElevatedButton(
-
                 style:
                     ElevatedButton.styleFrom(
-
                   backgroundColor:
                       Colors.black,
-
                   padding:
                       const EdgeInsets.symmetric(
                     vertical: 14,
                   ),
-
                   shape:
                       RoundedRectangleBorder(
-
                     borderRadius:
                         BorderRadius.circular(10),
                   ),
                 ),
-
                 onPressed:
                     _isLoading
                         ? null
                         : _createAccount,
-
                 child:
                     _isLoading
-
                         ? const SizedBox(
-
                             height: 22,
-
                             width: 22,
-
                             child:
                                 CircularProgressIndicator(
-
                               color: Colors.white,
-
                               strokeWidth: 2.5,
                             ),
                           )
-
                         : const Text(
-
                             'Create Account',
-
                             style: TextStyle(
-
                               fontSize: 18,
-
                               color: Colors.white,
-
                               fontWeight:
                                   FontWeight.bold,
                             ),
                           ),
               ),
             ),
-
             const SizedBox(height: 16),
           ],
         ),

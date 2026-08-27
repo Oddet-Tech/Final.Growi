@@ -36,9 +36,9 @@ dependencies:
   cupertino_icons: ^1.0.8
   image_picker: ^1.2.2
   geolocator: ^14.0.2
-  firebase_core: ^4.9.0
-  firebase_auth: ^6.5.1
-  cloud_firestore: ^6.4.1
+  firebase_core: ^4.11.0
+  firebase_auth: ^6.5.4
+  cloud_firestore: ^6.6.0
 
 dev_dependencies:
   flutter_test:
@@ -67,6 +67,7 @@ flutter:
     - assets/Clothing.png
     - assets/Icon.png
     - assets/ticket.png
+    - assets/grocery.png
   # - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see
