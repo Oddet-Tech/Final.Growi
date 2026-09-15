@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:growi_project/appscreen/thetick.dart';// import your Ticket screen
 import 'package:growi_project/appscreen/foodpage.dart';
+import 'package:growi_project/appscreen/thetick.dart';// import your Ticket screen
 
 class Tickets extends StatelessWidget {
   const Tickets({super.key});
@@ -76,7 +76,8 @@ class Tickets extends StatelessWidget {
                 MaterialPageRoute(
                   builder: (context) => const FoodPage(),
                 ),
-              ),
+              );
+          
             },
             child: Container(
               width: double.infinity,
@@ -90,7 +91,7 @@ class Tickets extends StatelessWidget {
                   width: 2,
                 ),
                 image: const DecorationImage(
-                  image: AssetImage('assets/grocery.png'),
+                  image: AssetImage('assets/foodgrowi.png'),
                   fit: BoxFit.cover,
                 ),
               ),

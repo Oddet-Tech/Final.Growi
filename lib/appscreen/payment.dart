@@ -165,12 +165,10 @@ class _PaymentPageState extends State<PaymentPage> {
         orderDate: DateTime.now(),
       );
 
-      final orderId = await FirebaseService.createOrder(order);
-
-      await FirebaseService.sendOrderConfirmationEmail(
-        order,
-        userEmail,
-        userName,
+      final orderId = await FirebaseService.createSuccessfulCheckout(
+        order: order,
+        userEmail: userEmail,
+        userName: userName,
       );
 
       setState(() {

@@ -122,7 +122,7 @@ class _SecondScreenState extends State<SecondScreen> {
       .toString();
     final String userEmail = (data['email'] ?? fallbackEmail).toString();
     if (!mounted) return;
-    Navigator.pushReplacement(
+    Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
         builder: (context) => RealHome(
@@ -130,6 +130,7 @@ class _SecondScreenState extends State<SecondScreen> {
           email: userEmail,
         ),
       ),
+      (route) => false,
     );
   }
 

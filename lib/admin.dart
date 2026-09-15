@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:growi_project/appscreen/payment.dart';
+import 'package:growi_project/services/firebase_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'appscreen/models.dart';
 
@@ -92,7 +93,7 @@ class _AdminState extends State<Admin> {
 
   // ── Product CRUD ──────────────────────────────────────────────────────────
 
-  void addPhone() {
+  Future<void> addPhone() async {
     final parsedPrice = double.tryParse(price.text);
     if (name.text.isEmpty ||
         desc.text.isEmpty ||
@@ -139,6 +140,18 @@ class _AdminState extends State<Admin> {
       webImages.clear();
       selectedColors.clear();
     });
+
+    try {
+      await FirebaseService.saveProduct(newPhone);
+    } catch (e) {
+      if (mounted) {
+        setState(() => globalPhonesList.removeWhere((product) => product.id == newPhone.id));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Product was not published: $e'), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(

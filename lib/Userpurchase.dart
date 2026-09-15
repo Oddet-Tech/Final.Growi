@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:growi_project/admin.dart';
 import 'package:growi_project/appscreen/models.dart';
 import 'package:growi_project/appscreen/payment.dart';
+import 'package:growi_project/services/firebase_service.dart';
 
 // A single reusable brand color so it isn't repeated everywhere.
 const kBrandGreen = Color(0xFF1F7A4C);
@@ -29,6 +31,30 @@ class _UserPurcheseState extends State<UserPurchese> {
   final List<CartItem> cart = [];
   final Map<int, String> selectedColors = {};
   bool showCart = false;
+  bool _showCartAddedAnimation = false;
+  Timer? _cartAddedTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+  }
+
+  Future<void> _loadProducts() async {
+    try {
+      final products = await FirebaseService.getProducts();
+      if (!mounted) return;
+      setState(() {
+        globalPhonesList
+          ..clear()
+          ..addAll(products);
+      });
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar('Unable to load products: $e', color: Colors.red);
+      }
+    }
+  }
 
   // Total is now calculated on demand instead of being tracked as
   // mutable state that can drift out of sync with the cart contents.
@@ -65,8 +91,22 @@ class _UserPurcheseState extends State<UserPurchese> {
         product.inStock = false;
       }
     });
+    _cartAddedTimer?.cancel();
+    setState(() => _showCartAddedAnimation = true);
+    _cartAddedTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() => _showCartAddedAnimation = false);
+      }
+    });
     _showSnackBar("${product.name} added ($color)", color: Colors.green);
   }
+
+  @override
+  void dispose() {
+    _cartAddedTimer?.cancel();
+    super.dispose();
+  }
+
   void removeFromCart(int index) {
     setState(() {
       final removed = cart[index];
@@ -121,6 +161,7 @@ class _UserPurcheseState extends State<UserPurchese> {
           padding: const EdgeInsets.only(right: 10),
           child: _CartIconWithBadge(
             itemCount: cart.length,
+            showAddedAnimation: _showCartAddedAnimation,
             onTap: () => setState(() => showCart = !showCart),
           ),
         ),
@@ -165,10 +206,18 @@ class _UserPurcheseState extends State<UserPurchese> {
           child: ListView.builder(
             padding: const EdgeInsets.all(12),
             itemCount: cart.length,
-            itemBuilder: (_, index) => CartItemTile(
-              item: cart[index],
-              onRemove: () => removeFromCart(index),
-            ),
+            itemBuilder: (_, index) {
+              final item = cart[index];
+              final stillAvailable = globalPhonesList.any(
+                (product) => product.id == item.product.id,
+              );
+
+              return CartItemTile(
+                item: item,
+                stillAvailable: stillAvailable,
+                onRemove: () => removeFromCart(index),
+              );
+            },
           ),
         ),
         CartSummary(totalPrice: totalPrice, onCheckout: checkout),
@@ -179,19 +228,45 @@ class _UserPurcheseState extends State<UserPurchese> {
 
 class _CartIconWithBadge extends StatelessWidget {
   final int itemCount;
+  final bool showAddedAnimation;
   final VoidCallback onTap;
 
-  const _CartIconWithBadge({required this.itemCount, required this.onTap});
+  const _CartIconWithBadge({
+    required this.itemCount,
+    required this.showAddedAnimation,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
         IconButton(
-          icon: const Icon(Icons.shopping_cart, color: Colors.black),
+          icon: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            transitionBuilder: (child, animation) => ScaleTransition(
+              scale: animation,
+              child: child,
+            ),
+            child: showAddedAnimation
+                ? const Text(
+                    '+1',
+                    key: ValueKey('cart-added'),
+                    style: TextStyle(
+                      color: Colors.green,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  )
+                : const Icon(
+                    Icons.shopping_cart,
+                    key: ValueKey('cart-icon'),
+                    color: Colors.black,
+                  ),
+          ),
           onPressed: onTap,
         ),
-        if (itemCount > 0)
+        if (itemCount > 0 && !showAddedAnimation)
           Positioned(
             right: 2,
             top: 2,
@@ -327,7 +402,7 @@ class ProductCard extends StatelessWidget {
     );
   }
 }
-class _ProductImageCarousel extends StatelessWidget {
+class _ProductImageCarousel extends StatefulWidget {
   final List<Uint8List> images;
   final bool soldOut;
   final ValueChanged<dynamic> onImageTap;
@@ -339,6 +414,13 @@ class _ProductImageCarousel extends StatelessWidget {
   });
 
   @override
+  State<_ProductImageCarousel> createState() => _ProductImageCarouselState();
+}
+
+class _ProductImageCarouselState extends State<_ProductImageCarousel> {
+  int _currentImage = 0;
+
+  @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
@@ -347,11 +429,12 @@ class _ProductImageCarousel extends StatelessWidget {
           child: ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             child: PageView.builder(
-              itemCount: images.length,
+              itemCount: widget.images.length,
+              onPageChanged: (index) => setState(() => _currentImage = index),
               itemBuilder: (_, index) {
-                final img = images[index];
+                final img = widget.images[index];
                 return GestureDetector(
-                  onTap: () => onImageTap(img),
+                  onTap: () => widget.onImageTap(img),
                   child: Image.memory(
                     img,
                     fit: BoxFit.cover,
@@ -368,7 +451,29 @@ class _ProductImageCarousel extends StatelessWidget {
             ),
           ),
         ),
-        if (soldOut)
+        if (widget.images.length > 1)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 12,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.65),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  '${_currentImage + 1}/${widget.images.length}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        if (widget.soldOut)
           Positioned(
             top: 18,
             left: -40,
@@ -492,49 +597,76 @@ class _PriceAndAddButton extends StatelessWidget {
 /// One row in the cart list: thumbnail, name, color, price, delete button.
 class CartItemTile extends StatelessWidget {
   final CartItem item;
+  final bool stillAvailable;
   final VoidCallback onRemove;
 
-  const CartItemTile({super.key, required this.item, required this.onRemove});
+  const CartItemTile({
+    super.key,
+    required this.item,
+    required this.stillAvailable,
+    required this.onRemove,
+  });
 
   @override
   Widget build(BuildContext context) {
     final product = item.product;
     final hasImage = product.webImages != null && product.webImages!.isNotEmpty;
 
+    final statusColor = stillAvailable ? Colors.green : Colors.red;
+    final statusText = stillAvailable ? 'Still Available' : 'Sold Out';
+
     return Card(
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: ListTile(
-        minLeadingWidth: 60,
-        contentPadding: const EdgeInsets.all(14),
-        leading: hasImage
-            ? ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Image.memory(
-                  product.webImages!.first,
-                  width: 48,
-                  height: 48,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    width: 48,
-                    height: 48,
-                    color: Colors.grey.shade200,
-                    child: const Icon(Icons.broken_image, color: Colors.grey),
-                  ),
-                ),
-              )
-            : const Icon(Icons.phone_android),
-        title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Color: ${item.color}"),
-            Text("R${product.price.toStringAsFixed(2)}"),
-          ],
-        ),
-        trailing: IconButton(
-          icon: const Icon(Icons.delete, color: Colors.red),
-          onPressed: onRemove,
-        ),
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            color: statusColor,
+            child: Text(
+              statusText,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          ListTile(
+            minLeadingWidth: 60,
+            contentPadding: const EdgeInsets.all(14),
+            leading: hasImage
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.memory(
+                      product.webImages!.first,
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 48,
+                        height: 48,
+                        color: Colors.grey.shade200,
+                        child: const Icon(Icons.broken_image, color: Colors.grey),
+                      ),
+                    ),
+                  )
+                : const Icon(Icons.phone_android),
+            title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Color: ${item.color}"),
+                Text("R${product.price.toStringAsFixed(2)}"),
+              ],
+            ),
+            trailing: IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: onRemove,
+            ),
+          ),
+        ],
       ),
     );
   }

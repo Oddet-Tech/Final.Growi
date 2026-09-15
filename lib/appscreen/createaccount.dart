@@ -86,7 +86,7 @@ class _NewAccountScreenState
       _verificationComplete = true;
       _verificationTimer?.cancel();
       if (!mounted) return;
-      Navigator.pushReplacement(
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
           builder: (_) => RealHome(
@@ -94,6 +94,7 @@ class _NewAccountScreenState
             email: refreshedUser.email ?? email,
           ),
         ),
+        (route) => false,
       );
     } catch (e) {
       debugPrint('Email verification check error: $e');

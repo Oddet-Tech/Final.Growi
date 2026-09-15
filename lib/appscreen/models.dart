@@ -90,7 +90,10 @@ class Models {
       discountPrice: map['discountPrice']?.toDouble(),
 
       imagePath: map['imagePath'],
-      webImages: null,
+      webImages: (map['webImages'] as List<dynamic>?)?.map((image) {
+        if (image is Uint8List) return image;
+        return Uint8List.fromList(List<int>.from(image as List));
+      }).toList(),
 
       colors: List<String>.from(map['colors'] ?? []),
 

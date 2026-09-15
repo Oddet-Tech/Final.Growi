@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart' hide Order;
 import 'package:growi_project/appscreen/models.dart';
+import 'dart:typed_data';
 
 class FirebaseService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -8,6 +9,43 @@ class FirebaseService {
   static const String ordersCollection = 'orders';
   static const String usersCollection = 'users';
   static const String emailLogsCollection = 'emailLogs';
+  static const String productsCollection = 'products';
+
+  // ===== PRODUCT OPERATIONS =====
+
+  static Future<void> saveProduct(Models product) async {
+    try {
+      final data = product.toMap();
+      data['webImages'] = product.webImages;
+      await _firestore.collection(productsCollection).doc(product.id).set(data);
+    } catch (e) {
+      throw Exception('Failed to save product: $e');
+    }
+  }
+
+  static Future<List<Models>> getProducts() async {
+    try {
+      final snapshot = await _firestore
+          .collection(productsCollection)
+          .where('isApproved', isEqualTo: true)
+          .get();
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        final storedImages = data['webImages'];
+        if (storedImages is List) {
+          data['webImages'] = storedImages.map((image) {
+            if (image is Uint8List) return image;
+            return Uint8List.fromList(List<int>.from(image as List));
+          }).toList();
+        }
+        return Models.fromMap(data);
+      }).toList();
+    } catch (e) {
+      throw Exception('Failed to load products: $e');
+    }
+  }
 
   // ===== ORDER OPERATIONS =====
 
@@ -18,6 +56,47 @@ class FirebaseService {
       return docRef.id;
     } catch (e) {
       throw Exception('Failed to create order: $e');
+    }
+  }
+
+  /// Creates the order and its confirmation records as one checkout operation.
+  /// If any write fails, the order is not visible to users or admins.
+  static Future<String> createSuccessfulCheckout({
+    required Order order,
+    required String userEmail,
+    required String userName,
+  }) async {
+    try {
+      final orderRef = _firestore.collection(ordersCollection).doc();
+      final orderId = orderRef.id;
+      final orderData = {...order.toMap(), 'id': orderId};
+      final batch = _firestore.batch();
+
+      batch.set(orderRef, orderData);
+      batch.set(_firestore.collection('emailQueue').doc(), {
+        'type': 'order_confirmation',
+        'to': userEmail,
+        'userName': userName,
+        'orderId': orderId,
+        'orderData': orderData,
+        'totalItems': order.items.length,
+        'finalTotal': order.finalTotal,
+        'pickupStore': order.locationInfo.storeName,
+        'createdAt': DateTime.now().toIso8601String(),
+        'sent': false,
+      });
+      batch.set(_firestore.collection(emailLogsCollection).doc(), {
+        'type': 'order_confirmation',
+        'recipient': userEmail,
+        'orderId': orderId,
+        'status': 'Queued',
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+
+      await batch.commit();
+      return orderId;
+    } catch (e) {
+      throw Exception('Checkout failed. No order was created: $e');
     }
   }
 

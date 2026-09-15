@@ -18,6 +18,7 @@ class RealHome extends StatefulWidget {
   State<RealHome> createState() => _RealHomeState();
 }
 class _RealHomeState extends State<RealHome> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _currentPasswordController = TextEditingController();
   final TextEditingController _newPasswordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
@@ -172,12 +173,22 @@ class _RealHomeState extends State<RealHome> {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        // Drawer for side popout for profile and other options
-        drawer: _buildDrawer(), //Side popout
-        appBar: AppBar(
+    final canPop = Navigator.of(context).canPop();
+
+    return PopScope(
+      canPop: canPop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && !canPop) {
+          _scaffoldKey.currentState?.openDrawer();
+        }
+      },
+      child: DefaultTabController(
+        length: 2,
+        child: Scaffold(
+          key: _scaffoldKey,
+          // Drawer for side popout for profile and other options
+          drawer: _buildDrawer(), //Side popout
+          appBar: AppBar(
           leading: Builder(
             builder: (context) => IconButton(
               icon: const Icon(Icons.menu, color: Colors.black),
@@ -201,15 +212,16 @@ class _RealHomeState extends State<RealHome> {
               Tab(text: 'Stores'),
             ],
           ),
-        ),
-        backgroundColor: const Color(0xFFF8EED2),
-        body: TabBarView(
+          ),
+          backgroundColor: const Color(0xFFF8EED2),
+          body: TabBarView(
           //these TabBarView will have the content of the two tabs in a form of a Row
           children: [
             //classes for the two tabs will be called here
             const Tickets(),
             const IStoreScreen(),
           ],
+          ),
         ),
       ),
     );
