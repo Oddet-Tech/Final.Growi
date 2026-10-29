@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
@@ -24,36 +24,25 @@ class AuthService {
       throw Exception('Account creation failed.');
     }
 
-    try {
-      await user.updateDisplayName(sanitizedName);
-      await user.reload();
-    } catch (e) {
-      debugPrint('Profile update error: $e');
-    }
-
-    try {
-      final actionCodeSettings = ActionCodeSettings(
-        url: 'https://growi-1.firebaseapp.com',
-        handleCodeInApp: true,
-        iOSBundleId: 'com.example.growiProject',
-        androidPackageName: 'com.example.growiProject',
-        androidInstallApp: true,
-        androidMinimumVersion: '1',
-      );
-      await user.sendEmailVerification(actionCodeSettings);
-    } catch (e) {
-      debugPrint('Verification email error: $e');
-    }
-
-    await _firestore.collection('users').doc(user.uid).set({
-      'uid': user.uid,
-      'fullName': sanitizedName,
-      'displayName': sanitizedName,
-      'email': normalizedEmail,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-      'emailVerified': false,
-    }, SetOptions(merge: true));
+    await Future.wait<void>([
+      () async {
+        try {
+          await user.updateDisplayName(sanitizedName);
+        } catch (e) {
+          debugPrint('Profile update error: $e');
+        }
+      }(),
+      _sendVerificationEmail(user, 'Verification email error'),
+      _firestore.collection('users').doc(user.uid).set({
+        'uid': user.uid,
+        'fullName': sanitizedName,
+        'displayName': sanitizedName,
+        'email': normalizedEmail,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'emailVerified': false,
+      }, SetOptions(merge: true)),
+    ]);
 
     return credential;
   }
@@ -69,6 +58,13 @@ class AuthService {
   }
 
   static Future<void> sendVerificationEmail(User user) async {
+    await _sendVerificationEmail(user, 'Verification email resend error');
+  }
+
+  static Future<void> _sendVerificationEmail(
+    User user,
+    String errorContext,
+  ) async {
     try {
       final actionCodeSettings = ActionCodeSettings(
         url: 'https://growi-1.firebaseapp.com',
@@ -80,11 +76,14 @@ class AuthService {
       );
       await user.sendEmailVerification(actionCodeSettings);
     } catch (e) {
-      debugPrint('Verification email resend error: $e');
+      debugPrint('$errorContext: $e');
     }
   }
 
-  static Future<void> ensureUserProfile(User user, {String? fallbackEmail}) async {
+  static Future<void> ensureUserProfile(
+    User user, {
+    String? fallbackEmail,
+  }) async {
     try {
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
       if (userDoc.exists) {

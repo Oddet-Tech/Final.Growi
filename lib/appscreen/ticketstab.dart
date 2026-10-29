@@ -24,6 +24,7 @@ class Tickets extends StatelessWidget {
             child: Container(
               width: double.infinity,
               height: 170,
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 borderRadius: const BorderRadius.all(
                   Radius.circular(12),
@@ -90,39 +91,52 @@ class Tickets extends StatelessWidget {
                   color: Colors.black,
                   width: 2,
                 ),
-                image: const DecorationImage(
-                  image: AssetImage('assets/foodgrowi.png'),
-                  fit: BoxFit.cover,
-                ),
               ),
-              child: const Padding(
-                padding: EdgeInsets.all(16),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.restaurant_menu,
-                      color: Colors.white,
-                      size: 28,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      'Food',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        shadows: [
-                          Shadow(
-                            offset: Offset(1, 1),
-                            blurRadius: 4,
-                            color: Colors.black54,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(
+                    'assets/foodgrowi.png',
+                    fit: BoxFit.cover,
+                    frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                      if (wasSynchronouslyLoaded || frame != null) return child;
+                      return const Center(
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                        ),
+                      );
+                    },
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.restaurant_menu,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'Food',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            shadows: [
+                              Shadow(
+                                offset: Offset(1, 1),
+                                blurRadius: 4,
+                                color: Colors.black54,
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),

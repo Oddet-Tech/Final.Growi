@@ -54,6 +54,7 @@ class _MyAppState extends State<MyApp> {
         'assets/Icon.png',
         'assets/Clothing.png',
         'assets/ticket.png',
+        'assets/foodgrowi.png',
       ])
         precacheImage(AssetImage(assetPath), loadingContext),
     ]);

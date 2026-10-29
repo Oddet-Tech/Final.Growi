@@ -14,13 +14,10 @@ class FirebaseService {
   // ===== PRODUCT OPERATIONS =====
 
   static Future<void> saveProduct(Models product) async {
-    try {
-      final data = product.toMap();
-      data['webImages'] = product.webImages;
-      await _firestore.collection(productsCollection).doc(product.id).set(data);
-    } catch (e) {
-      throw Exception('Failed to save product: $e');
-    }
+    final data = product.toMap();
+    data.remove('imagePath');
+    data['webImages'] = product.webImages?.map((image) => Blob(image)).toList();
+    await _firestore.collection(productsCollection).doc(product.id).set(data);
   }
 
   static Future<List<Models>> getProducts() async {
@@ -36,6 +33,7 @@ class FirebaseService {
         final storedImages = data['webImages'];
         if (storedImages is List) {
           data['webImages'] = storedImages.map((image) {
+            if (image is Blob) return image.bytes;
             if (image is Uint8List) return image;
             return Uint8List.fromList(List<int>.from(image as List));
           }).toList();
@@ -52,7 +50,9 @@ class FirebaseService {
   /// Create a new order
   static Future<String> createOrder(Order order) async {
     try {
-      final docRef = await _firestore.collection(ordersCollection).add(order.toMap());
+      final docRef = await _firestore
+          .collection(ordersCollection)
+          .add(order.toMap());
       return docRef.id;
     } catch (e) {
       throw Exception('Failed to create order: $e');
@@ -78,6 +78,7 @@ class FirebaseService {
         'to': userEmail,
         'userName': userName,
         'orderId': orderId,
+        'userId': order.userId,
         'orderData': orderData,
         'totalItems': order.items.length,
         'finalTotal': order.finalTotal,
@@ -89,6 +90,7 @@ class FirebaseService {
         'type': 'order_confirmation',
         'recipient': userEmail,
         'orderId': orderId,
+        'userId': order.userId,
         'status': 'Queued',
         'timestamp': DateTime.now().toIso8601String(),
       });
@@ -122,7 +124,10 @@ class FirebaseService {
   /// Get single order by ID
   static Future<Order?> getOrder(String orderId) async {
     try {
-      final doc = await _firestore.collection(ordersCollection).doc(orderId).get();
+      final doc = await _firestore
+          .collection(ordersCollection)
+          .doc(orderId)
+          .get();
       if (doc.exists) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
         data['id'] = doc.id;
@@ -144,13 +149,18 @@ class FirebaseService {
     try {
       final updateData = {
         'status': newStatus,
-        if (newStatus == 'Shipped') 'shippedDate': DateTime.now().toIso8601String(),
-        if (newStatus == 'Delivered') 'deliveredDate': DateTime.now().toIso8601String(),
+        if (newStatus == 'Shipped')
+          'shippedDate': DateTime.now().toIso8601String(),
+        if (newStatus == 'Delivered')
+          'deliveredDate': DateTime.now().toIso8601String(),
         if (trackingNumber != null) 'trackingNumber': trackingNumber,
         if (notes != null) 'notes': notes,
       };
 
-      await _firestore.collection(ordersCollection).doc(orderId).update(updateData);
+      await _firestore
+          .collection(ordersCollection)
+          .doc(orderId)
+          .update(updateData);
 
       // Send notification email
       final order = await getOrder(orderId);
@@ -213,12 +223,7 @@ class FirebaseService {
         'sent': false,
       });
 
-      await _logEmailActivity(
-        'payment_success',
-        userEmail,
-        order.id,
-        'Queued',
-      );
+      await _logEmailActivity('payment_success', userEmail, order.id, 'Queued');
     } catch (e) {
       throw Exception('Failed to queue payment success email: $e');
     }
@@ -227,7 +232,10 @@ class FirebaseService {
   /// Send status update email
   static Future<void> _sendStatusUpdateEmail(Order order) async {
     try {
-      final userDoc = await _firestore.collection(usersCollection).doc(order.userId).get();
+      final userDoc = await _firestore
+          .collection(usersCollection)
+          .doc(order.userId)
+          .get();
       final userEmail = userDoc.data()?['email'] ?? '';
       final userName = userDoc.data()?['displayName'] ?? 'Customer';
 
@@ -266,12 +274,7 @@ class FirebaseService {
         'sent': false,
       });
 
-      await _logEmailActivity(
-        emailType,
-        userEmail,
-        order.id,
-        'Queued',
-      );
+      await _logEmailActivity(emailType, userEmail, order.id, 'Queued');
     } catch (e) {
       throw Exception('Failed to queue status update email: $e');
     }
@@ -300,16 +303,17 @@ class FirebaseService {
   // ===== USER OPERATIONS =====
 
   /// Save or update user email
-  static Future<void> saveUserEmail(String userId, String email, String displayName) async {
+  static Future<void> saveUserEmail(
+    String userId,
+    String email,
+    String displayName,
+  ) async {
     try {
-      await _firestore.collection(usersCollection).doc(userId).set(
-        {
-          'email': email,
-          'displayName': displayName,
-          'lastUpdated': DateTime.now().toIso8601String(),
-        },
-        SetOptions(merge: true),
-      );
+      await _firestore.collection(usersCollection).doc(userId).set({
+        'email': email,
+        'displayName': displayName,
+        'lastUpdated': DateTime.now().toIso8601String(),
+      }, SetOptions(merge: true));
     } catch (e) {
       throw Exception('Failed to save user email: $e');
     }
@@ -318,7 +322,10 @@ class FirebaseService {
   /// Get user email
   static Future<String?> getUserEmail(String userId) async {
     try {
-      final doc = await _firestore.collection(usersCollection).doc(userId).get();
+      final doc = await _firestore
+          .collection(usersCollection)
+          .doc(userId)
+          .get();
       return doc.data()?['email'];
     } catch (e) {
       throw Exception('Failed to get user email: $e');
@@ -391,12 +398,12 @@ class FirebaseService {
         .orderBy('orderDate', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        Map<String, dynamic> data = doc.data();
-        data['id'] = doc.id;
-        return Order.fromMap(data);
-      }).toList();
-    });
+          return snapshot.docs.map((doc) {
+            Map<String, dynamic> data = doc.data();
+            data['id'] = doc.id;
+            return Order.fromMap(data);
+          }).toList();
+        });
   }
 
   /// Stream of all orders for admin
@@ -406,11 +413,11 @@ class FirebaseService {
         .orderBy('orderDate', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        Map<String, dynamic> data = doc.data();
-        data['id'] = doc.id;
-        return Order.fromMap(data);
-      }).toList();
-    });
+          return snapshot.docs.map((doc) {
+            Map<String, dynamic> data = doc.data();
+            data['id'] = doc.id;
+            return Order.fromMap(data);
+          }).toList();
+        });
   }
 }

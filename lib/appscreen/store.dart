@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:growi_project/admin.dart';
+import 'package:growi_project/Userpurchase.dart';
 
 class IStoreScreen extends StatelessWidget {
   const IStoreScreen({super.key});
@@ -16,7 +16,7 @@ class IStoreScreen extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const UserPurchase(),
+                    builder: (context) => const UserPurchese(),
                   ),
                 );
               },

@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:growi_project/appscreen/payment.dart';
@@ -22,10 +23,12 @@ class _AdminState extends State<Admin> {
   final picker = ImagePicker();
 
   int _selectedTab = 0;
+  bool _isSavingProduct = false;
 
   final TextEditingController name = TextEditingController();
   final TextEditingController desc = TextEditingController();
   final TextEditingController price = TextEditingController();
+  final TextEditingController stockQuantity = TextEditingController();
 
   List<XFile> selectedImages = [];
   List<Uint8List> webImages = [];
@@ -66,7 +69,11 @@ class _AdminState extends State<Admin> {
   // ── Image picker ──────────────────────────────────────────────────────────
 
   Future<void> pickImages() async {
-    final picked = await picker.pickMultiImage();
+    final picked = await picker.pickMultiImage(
+      maxWidth: 1000,
+      maxHeight: 1000,
+      imageQuality: 70,
+    );
     if (picked.isNotEmpty) {
       selectedImages = picked;
       webImages.clear();
@@ -94,14 +101,21 @@ class _AdminState extends State<Admin> {
   // ── Product CRUD ──────────────────────────────────────────────────────────
 
   Future<void> addPhone() async {
+    if (_isSavingProduct) return;
+
     final parsedPrice = double.tryParse(price.text);
-    if (name.text.isEmpty ||
-        desc.text.isEmpty ||
+    final parsedStockQuantity = int.tryParse(stockQuantity.text);
+    if (name.text.trim().isEmpty ||
+        desc.text.trim().isEmpty ||
         parsedPrice == null ||
+        parsedStockQuantity == null ||
+        parsedStockQuantity < 0 ||
         webImages.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Please fill all fields and pick at least one image"),
+          content: Text(
+            "Please fill all fields, enter a valid stock quantity, and pick at least one image",
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -117,8 +131,8 @@ class _AdminState extends State<Admin> {
       imagePath: selectedImages,
       webImages: List<Uint8List>.from(webImages),
       colors: selectedColors.isNotEmpty ? selectedColors.toList() : ['Default'],
-      stockQuantity: 10,
-      inStock: true,
+      stockQuantity: parsedStockQuantity,
+      inStock: parsedStockQuantity > 0,
       category: 'General',
       requiresShipping: true,
       shippingFee: 0,
@@ -131,34 +145,51 @@ class _AdminState extends State<Admin> {
       createdAt: DateTime.now(),
     );
 
-    setState(() {
-      globalPhonesList.add(newPhone);
-      name.clear();
-      desc.clear();
-      price.clear();
-      selectedImages.clear();
-      webImages.clear();
-      selectedColors.clear();
-    });
-
+    setState(() => _isSavingProduct = true);
     try {
       await FirebaseService.saveProduct(newPhone);
-    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        globalPhonesList.add(newPhone);
+        name.clear();
+        desc.clear();
+        price.clear();
+        stockQuantity.clear();
+        selectedImages.clear();
+        webImages.clear();
+        selectedColors.clear();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Product added successfully"),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } on FirebaseException catch (e) {
       if (mounted) {
-        setState(() => globalPhonesList.removeWhere((product) => product.id == newPhone.id));
+        final message = e.code == 'permission-denied'
+            ? 'Firestore denied this write. Check that this account is listed '
+                  'in admins by UID (or has the admin custom claim), and that '
+                  'the current firestore.rules have been deployed.'
+            : 'Product was not published: ${e.message ?? e.code}';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Product was not published: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(message), backgroundColor: Colors.red),
         );
       }
-      return;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Product was not published: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingProduct = false);
     }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Product added successfully"),
-        backgroundColor: Colors.green,
-      ),
-    );
   }
 
   void editPhone(int index) {
@@ -445,6 +476,12 @@ class _AdminState extends State<Admin> {
                 keyboardType: TextInputType.number,
                 decoration: _inputDecoration("Price"),
               ),
+              const SizedBox(height: 15),
+              TextField(
+                controller: stockQuantity,
+                keyboardType: TextInputType.number,
+                decoration: _inputDecoration("Quantity in stock"),
+              ),
             ],
           ),
         ),
@@ -556,8 +593,11 @@ class _AdminState extends State<Admin> {
               borderRadius: BorderRadius.circular(18),
             ),
           ),
-          onPressed: addPhone,
-          child: const Text("Add Product", style: TextStyle(fontSize: 18)),
+          onPressed: _isSavingProduct ? null : addPhone,
+          child: Text(
+            _isSavingProduct ? "Adding Product..." : "Add Product",
+            style: const TextStyle(fontSize: 18),
+          ),
         ),
 
         const SizedBox(height: 24),

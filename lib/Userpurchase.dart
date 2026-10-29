@@ -140,15 +140,29 @@ class _UserPurcheseState extends State<UserPurchese> {
   }
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: kBackgroundCream,
-      appBar: _buildAppBar(),
-      body: showCart ? _buildCartView() : _buildShopView(),
+    return PopScope(
+      canPop: !showCart,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && showCart) {
+          setState(() => showCart = false);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: kBackgroundCream,
+        appBar: _buildAppBar(),
+        body: showCart ? _buildCartView() : _buildShopView(),
+      ),
     );
   }
 
   AppBar _buildAppBar() {
     return AppBar(
+      leading: showCart
+          ? IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.black),
+              onPressed: () => setState(() => showCart = false),
+            )
+          : null,
       backgroundColor: kBackgroundCream,
       elevation: 0,
       centerTitle: true,
